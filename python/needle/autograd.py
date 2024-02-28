@@ -392,17 +392,33 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     after all its predecessors are traversed due to post-order DFS, we get a topological
     sort.
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    visited = []
+    topo_order = []
+    for node in node_list:
+        topo_sort_dfs(node,visited,topo_order)
+    return topo_order
 
 
 def topo_sort_dfs(node, visited, topo_order):
     """Post-order DFS"""
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
-
+    """Conditions to Add a node to the topo_order
+        Node has not been previously visited
+        Node is a leaf
+        All Inputs have been added to the topo_order"""
+    if node not in visited:
+        if node.is_leaf():
+            topo_order.append(node)
+            visited.append(node)
+            return 
+        else:
+            for input_node in node.inputs:
+                if input_node not in topo_order:
+                    topo_sort_dfs(input_node,visited,topo_order)
+        topo_order.append(node)
+        visited.append(node)
+        return
+    else:
+        return 
 
 ##############################
 ####### Helper Methods #######
