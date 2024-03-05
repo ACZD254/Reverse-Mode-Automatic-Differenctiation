@@ -379,9 +379,43 @@ def compute_gradient_of_variables(output_tensor, out_grad):
     # Traverse graph in reverse topological order given the output_node that we are taking gradient wrt.
     reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
 
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    """
+    Okay, so what are the steps here?
+    Well, for every node, populate the dict of gradient contributions to the output node(s)
+    How do we do this? 
+    For every node dependent on our node, we append the dependent into the list. 
+    Then we sum the incoming gradients to find the total incoming gradient
+    Finally, we compute the partial adjoint of that node w.r.t its inputs.
+    """
+    for node in reverse_topo_order:
+        #Sum up the contributions of the node to all the outputs
+        adjoint = sum_node_list(node_to_output_grads_list[node])
+        node.grad = adjoint #Populate the gradient field
+
+        #IF the node is not a leaf,
+        #Find the gradient with respect to its inupts
+        #Add the gradient to the Dictionary under that input
+        if node.is_leaf():
+            continue
+        partial_adjoints = node.op.gradient_as_tuple(adjoint,node)
+        for input, partial_adjoint in zip(node.inputs,partial_adjoints):
+            if input not in node_to_output_grads_list:
+                node_to_output_grads_list[input] = []
+            node_to_output_grads_list[input].append(partial_adjoint)
+
+    # for node in reverse_topo_order:
+    #     # sum up partial ajoints
+    #     ajoint = sum_node_list(node_to_output_grads_list[node])
+    #     node.grad = ajoint
+    #     if node.op is None:
+    #         # Leaf node
+    #         continue
+    #     # compute partial ajoints for input node
+    #     partial_ajoints = node.op.gradient_as_tuple(ajoint, node)
+    #     for in_node, partial_ajoint in zip(node.inputs, partial_ajoints):
+    #         if in_node not in node_to_output_grads_list:
+    #             node_to_output_grads_list[in_node] = []
+    #         node_to_output_grads_list[in_node].append(partial_ajoint)
 
 
 def find_topo_sort(node_list: List[Value]) -> List[Value]:

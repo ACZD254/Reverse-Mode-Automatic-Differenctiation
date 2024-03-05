@@ -202,7 +202,13 @@ class BroadcastTo(TensorOp):
         return array_api.broadcast_to(a, self.shape)
 
     def gradient(self, out_grad, node):
-        return summation(out_grad)
+        input_shape = node.inputs[0].shape
+        shrink_dims = [i for i in range(len(self.shape))]
+        for i, (ori, cur) in enumerate(zip(reversed(input_shape), reversed(self.shape))):
+            if ori == cur:
+                shrink_dims[len(self.shape) - i - 1] = -1
+        shrink_dims = tuple(filter(lambda x: x >= 0, shrink_dims))
+        return out_grad.sum(shrink_dims).reshape(input_shape)
 
 
 def broadcast_to(a, shape):
@@ -218,9 +224,11 @@ class Summation(TensorOp):
 
     def gradient(self, out_grad, node):
         #So I'm guessing we'll have to average it out?
-        input_shape = array_api.shape(node.inputs[0])
-        # Broadcast out_grad to input shape over summed axes
-        return broadcast_to(out_grad, shape=input_shape)
+        new_shape = list(node.inputs[0].shape)
+        axes = range(len(new_shape)) if self.axes is None else self.axes
+        for axis in axes:
+            new_shape[axis] = 1
+        return out_grad.reshape(new_shape).broadcast_to(node.inputs[0].shape)
 
 
 def summation(a, axes=None):
@@ -233,8 +241,22 @@ class MatMul(TensorOp):
 
     def gradient(self, out_grad, node):
         a, b = node.inputs
-        grad_a = matmul(out_grad, transpose(b))
-        grad_b = matmul(transpose(a), out_grad)
+        # Gradient w.r.t a (da):
+        # print("outgrad shape", out_grad.shape)
+        # print("b.T shape", transpose(b).shape)
+        # print("a.T shape", transpose(a).shape)
+        grad_a = matmul(out_grad,transpose(b))
+        # print("a shape", a.shape)
+        # print("grad_a shape", grad_a.shape)
+        grad_b = matmul(transpose(a),out_grad)
+        # print("b shape", b.shape)
+        # print("grad_b shape", grad_b.shape)
+        if (len(grad_a.shape) > len(a.shape)):
+            diff = len(grad_a.shape)-len(a.shape)
+            grad_a = summation(grad_a,(tuple(x for x in range(diff))))
+        if (len(grad_b.shape) > len(b.shape)):
+            diff = len(grad_a.shape)-len(b.shape)
+            grad_b = summation(grad_b,(tuple(x for x in range(diff))))
         return grad_a, grad_b
 
 def matmul(a, b):
@@ -267,14 +289,10 @@ def log(a):
 
 class Exp(TensorOp):
     def compute(self, a):
-        ### BEGIN YOUR SOLUTION
         return array_api.exp(a)
-        ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
-        ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
-        ### END YOUR SOLUTION
+        return out_grad*exp(node.inputs[0])
 
 
 def exp(a):
@@ -283,12 +301,16 @@ def exp(a):
 
 class ReLU(TensorOp):
     def compute(self, a):
-        ### BEGIN YOUR SOLUTION
-        return array_api.argmax(a,0)
-        ### END YOUR SOLUTION
+        out = array_api.copy(a)
+        out[a<0] = 0
+        return out
 
     def gradient(self, out_grad, node):
-        raise NotImplementedError()
+        #What is the gradient of a ReLU?
+        # 0 or 1
+        out = node.realize_cached_data().copy()
+        out[out>0] = 1
+        return out_grad*Tensor(out)
 
 
 def relu(a):

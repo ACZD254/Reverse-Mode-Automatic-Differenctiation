@@ -32,9 +32,51 @@ def parse_mnist(image_filesname, label_filename):
                 labels of the examples.  Values should be of type np.int8 and
                 for MNIST will contain the values 0-9.
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    #Okay so let me think about this. We have the MNIST file format.
+    #And it looks something like this.
+    """
+        [offset] [type]          [value]          [description]
+        0000     32 bit integer  0x00000803(2051) magic number
+        0004     32 bit integer  60000            number of images
+        0008     32 bit integer  28               number of rows
+        0012     32 bit integer  28               number of columns
+        0016     unsigned byte   ??               pixel
+    """
+    #So the first 16 Bytes are the header.
+    #And then we have the data.
+    #Okay. What's with the number of rows and the number of columns?
+    #Oh yeah, that's how many pixels are there in every image.
+    #So each image is Row*Column long.
+    #Okay so slowly but surely, a picture is forming.
+    with gzip.open(image_filesname) as image_bin:
+        img_header = image_bin.read(16)
+        img_magic_number, number_of_images, rows, cols = struct.unpack('>IIII',img_header)
+        print("number of colums is ", cols)
+        print("number of rows is ", rows)
+        print("number of images is ", number_of_images)
+        print("magic number is ", img_magic_number)
+        #Okay so now I have an open file and I can do something about it. 
+        #The header has been parsed. I have the data that I need.
+        #Or atleast the metadata that I need. Now I Need to pack each image in a numpy array.
+        #How do I do that?
+        #I don't think that I'm supposed to use a for-loop. Right? How do you populate an array anyway?
+        #So maybe something like preinitializing the array and then populating the fields?
+        #What I have found is even more efficient.
+        images = np.frombuffer(image_bin.read(number_of_images*rows*cols),dtype=np.uint8)
+        images = images.reshape(number_of_images, rows*cols).astype(np.float32)/255
+
+
+    with gzip.open(label_filename) as label_bin:
+        lbl_header = label_bin.read(8)
+        lbl_magic_number, number_of_items = struct.unpack('>II',lbl_header)
+        print("magic_number for labels is ", lbl_magic_number)
+        print("number of items is ", number_of_items)
+
+        labels = np.frombuffer(label_bin.read(number_of_items),dtype=np.uint8)
+
+    (X,y) = (images,labels)
+    print(y[0:10])
+    return (X,y)
 
 
 def softmax_loss(Z, y_one_hot):
@@ -52,10 +94,22 @@ def softmax_loss(Z, y_one_hot):
 
     Returns:
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
+
+    So we already have the logit predictions for each class.
+    y is a vector of one-hot encodings of the true label of each class.
+    
+    Lce = -log(softmax(Zi,yi))
+    
     """
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    #I really think that python's list comprehension might be the way to go
+    #So lets say that we're computing individual losses L_i
+    #Compute individual losses L_i for each example
+    #individual_losses = [-np.log(np.exp(Z[i, y[i]]) / np.sum(np.exp(Z[i]))) for i in range(batch_size)]
+    #Compute the average loss over the batch
+    #This is literally the formula from the HW1 ipynb
+    #Yes, I am confused slightly but essentially, we have 
+    #Loss =  (log(summation(exp(zi))) - zy )/ batch_size
+    return (ndl.log(ndl.exp(Z).sum((1,))).sum() - (y_one_hot * Z).sum()) / Z.shape[0]
 
 
 def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
@@ -82,10 +136,42 @@ def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
             W2: ndl.Tensor[np.float32]
     """
 
-    ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
-    ### END YOUR SOLUTION
+    for start_idx in range(0, X.shape[0], batch):
+        # Create batches
+        # X_batch = ndl.Tensor(X[start_idx:start_idx + batch])
+        # y_batch = y[start_idx:start_idx + batch]
 
+        # # Compute logits 
+        # Z1 = ndl.matmul(X_batch,W1) #this is the hypothesis h from the lectures.
+        # Z2 = ndl.matmul(ndl.relu(Z1),W2)
+        # # Create a one-hot encoding of the true labels
+        # Iy = np.zeros_like(Z2.realize_cached_data())
+        # #print("Iy shape is ",Iy.shape)
+        # Iy[np.arange(X_batch.shape[0]), y_batch] = 1
+        # print("Iy is", Iy.shape)
+        # Iy = ndl.Tensor(Iy)
+        # print("Iy tensor is", Iy.shape)
+        # # Softmax
+        # LCE= softmax_loss(Z2,Iy)
+        # print("LCE is", LCE.shape)
+        # # Compute the gradient
+        # batch_gradient = LCE.backward()
+        # print(batch_gradient)
+        # # Update theta
+
+        iterations = (y.size + batch - 1) // batch
+        for i in range(iterations):
+            x = ndl.Tensor(X[i * batch : (i+1) * batch, :])
+            Z = ndl.relu(x.matmul(W1)).matmul(W2)
+            yy = y[i * batch : (i+1) * batch]
+            y_one_hot = np.zeros((batch, y.max() + 1))
+            y_one_hot[np.arange(batch), yy] = 1
+            y_one_hot = ndl.Tensor(y_one_hot)
+            loss = softmax_loss(Z, y_one_hot)
+            loss.backward()
+            W1 = ndl.Tensor(W1.realize_cached_data() - lr * W1.grad.realize_cached_data())
+            W2 = ndl.Tensor(W2.realize_cached_data() - lr * W2.grad.realize_cached_data())
+        return W1, W2
 
 ### CODE BELOW IS FOR ILLUSTRATION, YOU DO NOT NEED TO EDIT
 
